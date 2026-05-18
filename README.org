@@ -1,0 +1,2 @@
+* Minimal-emcas configs
+https://github.com/jamescherti/minimal-emacs.d
