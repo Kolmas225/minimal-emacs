@@ -1,5 +1,34 @@
 ;;; post-init.el --- Post Init -*- lexical-binding: t; -*-
 
+(use-package compile-angel
+  :demand t
+  :config
+  ;; Set `compile-angel-verbose' to nil to disable compile-angel messages.
+  ;; (When set to nil, compile-angel won't show which file is being compiled.)
+  (setq compile-angel-verbose t)
+
+  ;; Uncomment the line below to compile automatically when an Elisp file is saved
+  ;; (add-hook 'emacs-lisp-mode-hook #'compile-angel-on-save-local-mode)
+
+  ;; The following directive prevents compile-angel from compiling your init
+  ;; files. If you choose to remove this push to `compile-angel-excluded-files'
+  ;; and compile your pre/post-init files, ensure you understand the
+  ;; implications and thoroughly test your code. For example, if you're using
+  ;; the `use-package' macro, you'll need to explicitly add:
+  ;; (eval-when-compile (require 'use-package))
+  ;; at the top of your init file.
+  (push "/init.el" compile-angel-excluded-files)
+  (push "/early-init.el" compile-angel-excluded-files)
+  (push "/pre-init.el" compile-angel-excluded-files)
+  (push "/post-init.el" compile-angel-excluded-files)
+  (push "/pre-early-init.el" compile-angel-excluded-files)
+  (push "/post-early-init.el" compile-angel-excluded-files)
+  (push "/local.el" compile-angel-excluded-files)
+
+  ;; A global mode that compiles .el files before they are loaded
+  ;; using `load' or `require'.
+  (compile-angel-on-load-mode 1))
+
 ;;; Font
 (set-face-attribute 'default nil :font "Maple Mono-13")
 (set-face-attribute 'fixed-pitch nil :font "Maple Mono-13")
@@ -29,7 +58,7 @@
   :commands (electric-pair-mode
              electric-pair-local-mode
              electric-pair-delete-pair)
-  :hook (elpaca-after-init . electric-pair-mode))
+  :hook (after-init . electric-pair-mode))
 
 ;; repeat-mode
 (use-package repeat
@@ -49,21 +78,28 @@
   
   (repeat-mode 1))
 
-;; tab-bar
-(use-package tab-bar
+;; save-place-mode enables Emacs to remember the last location within a file
+;; upon reopening. This feature is particularly beneficial for resuming work at
+;; the precise point where you previously left off.
+(use-package saveplace
   :ensure nil
-  :custom
-  (tab-bar-show 1)
-  (tab-bar-new-tab-choice "*scratch*")
-  (tab-bar-auto-width nil))
+  :commands (save-place-mode save-place-local-mode)
+  :hook
+  (after-init . save-place-mode)
+  :init
+  (setq save-place-limit 400))
 
 ;; auto-save-visited
 (use-package files
   :ensure nil
   :custom
-  (auto-save-visited-interval 10)
+  (auto-save-visited-interval 30)
   :init
   (auto-save-visited-mode 1))
+
+;; Set the fringes to match the pixel height of a character. This ensures the
+;; fringe is wide enough, scaling dynamically with the current font size.
+(fringe-mode (frame-char-width))
 
 ;; When Delete Selection mode is enabled, typed text replaces the selection
 ;; if the selection is active.
@@ -81,23 +117,30 @@
 ;; Display the current line and column numbers in the mode line
 (setq line-number-mode t)
 (setq column-number-mode t)
-(setq mode-line-position-column-line-format '("%l:%C"))
 
 ;; Display of line numbers in the buffer:
 (use-package display-line-numbers
   :ensure nil
   :custom
-  (display-line-numbers-type 'relative)
+  (display-line-numbers-type 'visual)
   (display-line-numbers-width-start t)
   (display-line-numbers-widen t)
   :hook
   ((prog-mode conf-mode text-mode) . #'display-line-numbers-mode))
 
-;; Set the maximum level of syntax highlighting for Tree-sitter modes
-(setq treesit-font-lock-level 4)
+(use-package simple
+  :ensure nil
+  :custom
+  (global-visual-line-mode t))
+
+(use-package treesit
+  :ensure nil
+  :custom
+  ;; Set the maximum level of syntax highlighting for Tree-sitter modes
+  (treesit-font-lock-level 4))
 
 ;; Paren match highlighting
-(add-hook 'elpaca-after-init-hook #'show-paren-mode)
+(add-hook 'after-init-hook #'show-paren-mode)
 
 (setopt tab-width 4
         c-basic-offset 4
@@ -109,6 +152,36 @@
         kill-ring-max 50
         bookmark-fringe-mark nil)
 
+(unless (and (eq window-system 'mac)
+             (bound-and-true-p mac-carbon-version-string))
+  ;; Enables `pixel-scroll-precision-mode' on all operating systems and Emacs
+  ;; versions, except for emacs-mac.
+  ;;
+  ;; Enabling `pixel-scroll-precision-mode' is unnecessary with emacs-mac, as
+  ;; this version of Emacs natively supports smooth scrolling.
+  ;; https://bitbucket.org/mituharu/emacs-mac/commits/65c6c96f27afa446df6f9d8eff63f9cc012cc738
+  (setq pixel-scroll-precision-use-momentum nil) ; Precise/smoother scrolling
+  (pixel-scroll-precision-mode 1))
+
+;; Track changes in the window configuration, allowing undoing actions such as
+;; closing windows.
+(setq winner-boring-buffers '("*Completions*"
+                              "*Minibuf-0*"
+                              "*Minibuf-1*"
+                              "*Minibuf-2*"
+                              "*Minibuf-3*"
+                              "*Minibuf-4*"
+                              "*Compile-Log*"
+                              "*inferior-lisp*"
+                              "*Fuzzy Completions*"
+                              "*Apropos*"
+                              "*Help*"
+                              "*cvs*"
+                              "*Buffer List*"
+                              "*Ibuffer*"
+                              "*esh command on file*"))
+(add-hook 'after-init-hook #'winner-mode)
+
 ;; Windmove
 (use-package windmove
   :ensure nil
@@ -117,12 +190,20 @@
   :config
   ;; Shift-arrow
   (windmove-default-keybindings)
-  ;; Meta-Shift-arrow
+  ;; Ctrl-arrow
   (windmove-display-default-keybindings)
   ;; Ctrl-Shift-arrow
   (windmove-swap-states-default-keybindings '(control))
-  ;; C-x arrow
+  ;; C-x Shift-arrow
   (windmove-delete-default-keybindings))
+
+;; tab-bar
+(use-package tab-bar
+  :ensure nil
+  :custom
+  (tab-bar-show 1)
+  (tab-bar-new-tab-choice "*scratch*")
+  (tab-bar-auto-width nil))
 
 (use-package uniquify
   :ensure nil
@@ -140,15 +221,15 @@
   ;; Constrain vertical cursor movement to lines within the buffer
   (dired-movement-style 'bounded-files)
   (dired-omit-files (concat "\\`[.]\\'"
-                               "\\|\\(?:\\.js\\)?\\.meta\\'"
-                               "\\|\\.\\(?:elc|a\\|o\\|pyc\\|pyo\\|swp\\|class\\)\\'"
-                               "\\|^\\.DS_Store\\'"
-                               "\\|^\\.\\(?:svn\\|git\\)\\'"
-                               "\\|^\\.ccls-cache\\'"
-                               "\\|^__pycache__\\'"
-                               "\\|^\\.project\\(?:ile\\)?\\'"
-                               "\\|^flycheck_.*"
-                               "\\|^flymake_.*"))
+                            "\\|\\(?:\\.js\\)?\\.meta\\'"
+                            "\\|\\.\\(?:elc|a\\|o\\|pyc\\|pyo\\|swp\\|class\\)\\'"
+                            "\\|^\\.DS_Store\\'"
+                            "\\|^\\.\\(?:svn\\|git\\)\\'"
+                            "\\|^\\.ccls-cache\\'"
+                            "\\|^__pycache__\\'"
+                            "\\|^\\.project\\(?:ile\\)?\\'"
+                            "\\|^flycheck_.*"
+                            "\\|^flymake_.*"))
   (dired-kill-when-opening-new-dired-buffer t)
   ;; dired-aux
   (dired-do-revert-buffer t)
@@ -175,7 +256,7 @@
         ("C-c C-e" . #'wdired-change-to-wdired-mode)))
 
 ;; Enables visual indication of minibuffer recursion depth after initialization.
-(add-hook 'elpaca-after-init-hook #'minibuffer-depth-indicate-mode)
+(add-hook 'after-init-hook #'minibuffer-depth-indicate-mode)
 
 ;; Configure Emacs to ask for confirmation before exiting
 (setq confirm-kill-emacs 'y-or-n-p)
@@ -238,7 +319,7 @@
 mouse-2: toggle rest visibility\n\
 mouse-3: go to end")))
   :hook
-  (elpaca-after-init . which-function-mode)
+  (after-init . which-function-mode)
   :config
   (setq which-func-unknown "N/A"))
 
@@ -295,9 +376,11 @@ mouse-3: go to end")))
 (defun my/rename-current-or-write-new-file (&optional arg)
   "Write to new file / Rename current buffer file (when C-u)"
   (interactive "P")
-  (if arg 
+  (if arg
       (call-interactively #'my/rename-current-buffer-file)
     (call-interactively #'write-file)))
+
+(keymap-global-unset "<f2>")            ; 2C-mode
 
 (keymap-global-set "C-o" #'my/open-line-and-indent)
 (keymap-global-set "C-S-o" #'open-line)
@@ -349,7 +432,7 @@ mouse-3: go to end")))
   (doom-modeline-battery t)
   (doom-modeline-workspace-name nil)
   :config
-  (doom-modeline-mode))
+  (doom-modeline-mode 1))
 
 ;; Helpful is an alternative to the built-in Emacs help that provides much more
 ;; contextual information.
@@ -382,6 +465,7 @@ mouse-3: go to end")))
 (use-package transient)
 ;;; Magit
 (use-package magit
+  :commands (magit magit-status)
   :after transient
   :custom
   ;; (magit-delete-by-moving-to-trash nil)
@@ -438,12 +522,13 @@ mouse-3: go to end")))
 ;; matches in any order against the candidates.
 (use-package orderless
   :custom
-  ;; NOTE: disable case sensitivity for better corfu experience
-  (orderless-smart-case nil)
-  (completion-ignore-case t)
+  ;; (orderless-smart-case nil)
+  ;; (completion-ignore-case t)
+  ;; (read-buffer-completion-ignore-case t)
+  ;; (read-file-name-completion-ignore-case t)
   (completion-styles '(orderless basic))
   (completion-category-defaults nil)
-  (completion-category-overrides '((file (styles partial-completion))
+  (completion-category-overrides '(;(file (styles partial-completion))
                                    (eglot (styles orderless))))
   (orderless-component-separator #'orderless-escapable-split-on-space) ; Use backslash for literal space
   ;; (completion-pcm-leading-wildcard t) ; emacs-31
@@ -453,8 +538,8 @@ mouse-3: go to end")))
 ;; In addition to that, Marginalia also enhances Vertico by adding rich
 ;; annotations to the completion candidates displayed in Vertico's interface.
 (use-package marginalia
-  :commands (marginalia-mode marginalia-cycle)
-  :hook (elpaca-after-init . marginalia-mode))
+  :init 
+  (marginalia-mode t))
 
 ;; Embark integrates with Consult and Vertico to provide context-sensitive
 ;; actions and quick access to commands based on the current selection, further
@@ -533,11 +618,10 @@ mouse-3: go to end")))
          ("M-g i" . consult-imenu)
          ("M-g I" . consult-imenu-multi)
          ;; M-s bindings in `search-map'
-         ("M-s d" . consult-find)
-         ("M-s c" . consult-locate)
-         ("M-s g" . consult-grep)
-         ("M-s G" . consult-git-grep)
+         ("M-s d" . consult-fd)
          ("M-s r" . consult-ripgrep)
+         ("M-s c" . consult-locate)
+         ("M-s g" . consult-git-grep)
          ("M-s l" . consult-line)
          ("M-s L" . consult-line-multi)
          ("M-s k" . consult-keep-lines)
@@ -673,7 +757,52 @@ mouse-3: go to end")))
     (add-to-list 'completion-at-point-functions capfs t)))
 
 (use-package vundo
+  :commands vundo
+  :custom
+  (vundo-glyph-alist vundo-unicode-symbols)
+  (vundo-compact-display t)
   :bind ("C-x u" . #'vundo))
+
+;; `vterm' is an Emacs terminal emulator that provides a fully interactive shell
+;; experience within Emacs, supporting features such as color, cursor movement,
+;; and advanced terminal capabilities. Unlike standard Emacs terminal modes,
+;; `vterm' utilizes the libvterm C library for high-performance emulation. This
+;; ensures accurate terminal behavior when running shell programs, text-based
+;; applications, and REPLs.
+(use-package vterm
+  :if (bound-and-true-p module-file-suffix)
+  :commands (vterm
+             vterm-send-string
+             vterm-send-return
+             vterm-send-key
+             vterm-module-compile)
+
+  :bind
+  ("C-c o T" . #'vterm)
+
+  :preface
+  (when noninteractive
+    ;; vterm unnecessarily triggers compilation of vterm-module.so upon loading.
+    ;; This prevents that during byte-compilation (`use-package' eagerly loads
+    ;; packages when compiling).
+    (advice-add #'vterm-module-compile :override #'ignore))
+
+  (defun my-vterm--setup ()
+    ;; Hide the mode-line
+    (setq mode-line-format nil)
+
+    ;; Inhibit early horizontal scrolling
+    (setq-local hscroll-margin 0)
+
+    ;; Suppress prompts for terminating active processes when closing vterm
+    (setq-local confirm-kill-processes nil))
+
+  :init
+  (add-hook 'vterm-mode-hook #'my-vterm--setup)
+
+  (setq vterm-timer-delay 0.05  ; Faster vterm
+        vterm-kill-buffer-on-exit t
+        vterm-max-scrollback 5000))
 
 ;; The easysession Emacs package is a session manager for Emacs that can persist
 ;; and restore file editing buffers, indirect buffers/clones, Dired buffers,
@@ -699,35 +828,44 @@ mouse-3: go to end")))
   ("C-c sr" . #'easysession-rename)
   ("C-c sR" . #'easysession-reset)
   ("C-c sd" . #'easysession-delete)
+  
   :init
-  (if (fboundp 'easysession-setup)
-      ;; The `easysession-setup' function adds hooks:
-      ;; - To enable automatic session loading during `emacs-startup-hook', or
-      ;;   `server-after-make-frame-hook' when running in daemon mode.
-      ;; - To automatically save the session at regular intervals, and when
-      ;;   Emacs exits.
-      (easysession-setup)
-    ;; Legacy
-    ;; The depth 102 and 103 have been added to to `add-hook' to ensure that the
-    ;; session is loaded after all other packages. (Using 103/102 is
-    ;; particularly useful for those using minimal-emacs.d, where some
-    ;; optimizations restore `file-name-handler-alist` at depth 101 during
-    ;; `emacs-startup-hook`.)
-    (add-hook 'emacs-startup-hook #'easysession-load-including-geometry 102)
-    (add-hook 'emacs-startup-hook #'easysession-save-mode 103))
+  (easysession-setup)
+
   :config
-  (add-hook 'easysession-new-session-hook #'easysession-reset))
+  ;; vterm with associated session naming
+  (defun my/vterm-for-session ()
+    "Create a new vterm instance for current session."
+    (interactive)
+    (let ((vterm-session-name (concat "vterm-" (easysession-get-session-name))))
+      (vterm vterm-session-name)))
+  (keymap-set mode-specific-map "o t" #'my/vterm-for-session))
 (use-package easysession-scratch
   :ensure nil
   :after easysession
   :init
   (easysession-scratch-mode 1))
 
+(use-package buffer-terminator
+  :custom
+  ;; Enable/Disable verbose mode to log buffer cleanup events
+  (buffer-terminator-verbose nil)
+
+  ;; Set the inactivity timeout (in seconds) after which buffers are considered
+  ;; inactive (default is 30 minutes):
+  (buffer-terminator-inactivity-timeout (* 30 60)) ; 30 minutes
+
+  ;; Define how frequently the cleanup process should run (default is every 10
+  ;; minutes):
+  (buffer-terminator-interval (* 10 60)) ; 10 minutes
+
+  :config
+  (buffer-terminator-mode 1))
+
 ;;; Avy
 (use-package avy
-  :commands (avy-goto-char
-             avy-goto-char-2
-             avy-next)
+  :commands (avy-goto-char-timer
+             avy-goto-word-or-subword-1)
   :custom
   ;; (avy-background t)
   (avy-single-candidate-jump nil)
@@ -744,7 +882,10 @@ mouse-3: go to end")))
      (?z . avy-action-zap-to-char)
      (?. . avy-action-embark)))
   :bind
-  ("C-'" . #'avy-goto-char-2)
+  ("C-'" . #'avy-goto-word-or-subword-1)
+  ("C-\"" . #'avy-goto-char-timer)
+  ("M-p" . #'avy-prev)
+  ("M-n" . #'avy-next)
   :config
   ;; Taken from karthink's avy blog
   (defun avy-action-embark (pt)
@@ -792,8 +933,10 @@ mouse-3: go to end")))
   ;; HACK https://github.com/alphapapa/magit-todos/issues/171#issuecomment-1934362142
   ;; :ensure (:depth nil)
   :ensure (:branch "main")
-  ;; :bind
-  ;; ("C-c i h" . #'hl-todo-insert)
+  :custom
+  (hl-todo-highlight-punctuation ":")
+  :bind
+  ("M-s t i" . #'hl-todo-insert)
   :init
   (global-hl-todo-mode))
 
@@ -862,7 +1005,6 @@ mouse-3: go to end")))
   :hook
   ((prog-mode sgml-mode nxml-mode tex-mode
               lisp-data-mode
-              org-mode
               eval-expression-minibuffer-setup) . puni-mode)
   :bind
   (:map puni-mode-map
@@ -949,17 +1091,40 @@ mouse-3: go to end")))
 (use-package tempel-collection
   :after tempel)
 
+(use-package flymake
+  :ensure nil
+  :hook
+  ;; use next-error for navigation
+  (flymake-mode . (lambda ()
+                    (setq-local next-error-function #'flymake-goto-next-error))))
+
+(use-package flymake-popon
+  :ensure
+  (:repo "https://codeberg.org/akib/emacs-flymake-popon.git")
+  :hook
+  (prog-mode . flymake-popon-mode))
+
 ;; Set up the Language Server Protocol (LSP) servers using Eglot.
 (use-package eglot
   :ensure nil
   :commands (eglot-ensure
              eglot-rename
              eglot-format-buffer)
+  :hook
+  (eglot-managed-mode . (lambda ()
+                          ;; NOTE: ignore case for easier completion
+                          (setq-local orderless-smart-case nil
+                                      completion-ignore-case t)))
   :bind
   (:map eglot-mode-map
         ("M-` d" . #'eglot-find-declaration)
         ("M-` i" . #'eglot-find-implementation)
-        ("M-` t" . #'eglot-find-typeDefinition)))
+        ("M-` t" . #'eglot-find-typeDefinition)
+        ("M-` r" . #'eglot-rename)
+        ("M-` a" . #'eglot-code-actions)
+        ("M-` o" . #'eglot-code-action-organize-imports)
+        ("M-` q" . #'eglot-code-action-quickfix)
+        ("M-` =" . #'eglot-format)))
 
 (use-package consult-eglot
   :after eglot
@@ -976,6 +1141,121 @@ mouse-3: go to end")))
   :init
   (eglot-tempel-mode t))
 
+(use-package eldoc-box
+  :after eglot
+  :custom
+  (eldoc-box-clear-with-C-g t)
+  :bind
+  (:map eglot-mode-map
+        ("C-h ." . #'eldoc-box-help-at-point)))
+
+(use-package org
+  :ensure nil
+  :custom
+  (org-directory "~/Documents/org/")
+  (org-startup-folded "show2levels")
+  (org-startup-indented t)
+  (org-hide-emphasis-markers t)
+  (org-refile-targets '((nil :maxlevel . 3)))
+  (org-archive-location "~/Documents/org/archive.org::* From %s")
+  ;; (org-auto-align-tags nil)
+  (org-tags-column 0)
+  (org-special-ctrl-a/e t)
+  (org-special-ctrl-k t)
+  (org-pretty-entities t)
+  (org-log-done 'time)
+  (org-return-follows-link t)
+  :bind
+  ("C-c l s" . #'org-store-link)
+  ("C-M-<return>" . #'org-insert-subheading)
+  (:map org-mode-map
+        ("M-g i" . #'consult-org-heading)
+        ("C-'" . #'avy-goto-char-2)
+        ("C-," . nil))
+  :config
+  ;; open linke in current window
+  (setf (alist-get 'file org-link-frame-setup) 'find-file))
+
+(use-package org-appear
+  :hook
+  (org-mode . org-appear-mode))
+
+(use-package org-modern
+  :after org
+  :custom
+  (org-modern-star 'replace)
+  (org-modern-hide-stars nil)
+  ;; (org-modern-table nil)
+  (org-modern-list
+   '(;; (?- . "-")
+     (?* . "•")
+     (?+ . "‣")))
+  (org-modern-block-name '("" . "")) ; or other chars; so top bracket is drawn promptly
+  :hook
+  (org-mode . org-modern-mode)
+  (org-agenda-finalize . org-modern-agenda))
+
+(use-package org-modern-indent
+  :ensure
+  (org-modern-indent
+   :host github
+   :repo "jdtsmith/org-modern-indent")
+  :config ; add late to hook
+  (add-hook 'org-mode-hook #'org-modern-indent-mode 90)
+  ;; HACK https://github.com/jdtsmith/org-modern-indent/issues/10#issuecomment-1671726529
+  (add-hook 'org-mode-hook (lambda () (aset org-indent--text-line-prefixes 0 (propertize " " 'face 'org-indent)))))
+
+;; org-babel & source blocks
+(use-package org
+  :ensure nil
+  :custom
+  (org-edit-src-content-indentation 0)
+  ;; trust the programmer, it can never go wrong
+  (org-confirm-babel-evaluate nil)
+  :config
+  (setf (alist-get :noweb org-babel-default-header-args) "strip-export")
+  (add-to-list 'org-src-lang-modes '("sh" . bash-ts))
+  (add-to-list 'org-src-lang-modes '("bash" . bash-ts)))
+
+(use-package apheleia
+  :bind
+  ("<f7>" . apheleia-format-buffer)
+  ;; :init
+  ;; ;; enabling auto format for all buffer
+  ;; (apheleia-global-mode t)
+  )
+
+(use-package diff-hl
+  :commands (diff-hl-mode
+             global-diff-hl-mode)
+  :hook (prog-mode . diff-hl-mode)
+  :init
+  (setq diff-hl-flydiff-delay 0.4)  ; Faster
+  (setq diff-hl-show-staged-changes nil)  ; Realtime feedback
+  (setq diff-hl-update-async t)  ; Do not block Emacs
+  (setq diff-hl-global-modes '(not pdf-view-mode image-mode)))
+
+;; Support for Git files (.gitconfig, .gitignore, .gitattributes...)
+(use-package git-modes
+  :commands (gitattributes-mode
+             gitconfig-mode
+             gitignore-mode)
+  :mode (("/\\.gitignore\\'" . gitignore-mode)
+         ("/info/exclude\\'" . gitignore-mode)
+         ("/git/ignore\\'" . gitignore-mode)
+         ("/.gitignore_global\\'" . gitignore-mode)  ; jc-dotfiles
+
+         ("/\\.gitconfig\\'" . gitconfig-mode)
+         ("/\\.git/config\\'" . gitconfig-mode)
+         ("/modules/.*/config\\'" . gitconfig-mode)
+         ("/git/config\\'" . gitconfig-mode)
+         ("/\\.gitmodules\\'" . gitconfig-mode)
+         ("/etc/gitconfig\\'" . gitconfig-mode)
+
+         ("/\\.gitattributes\\'" . gitattributes-mode)
+         ("/info/attributes\\'" . gitattributes-mode)
+         ("/git/attributes\\'" . gitattributes-mode)))
+
 (use-package markdown-ts-mode
   ;; FIXME: built-in in emacs-31
   ;; :ensure nil
@@ -987,10 +1267,13 @@ mouse-3: go to end")))
 (use-package go-ts-mode
   :ensure nil
   :mode "\\.go\\'"
-  :hook ((go-ts-mode . eglot-ensure)
-         (go-ts-mode . (lambda () (add-hook 'before-save-hook #'eglot-format-buffer nil t))))
-  :config
-  (setq go-ts-mode-indent-offset 4))
+  :custom
+  (go-ts-mode-indent-offset 4)
+  :hook 
+  (go-ts-mode . subword-mode)
+  (go-ts-mode . eglot-ensure)
+  (go-ts-mode . (lambda () 
+                  (add-hook 'before-save-hook #'eglot-format-buffer nil t))))
 
 (use-package ruby-mode
   :ensure nil
@@ -1008,15 +1291,17 @@ mouse-3: go to end")))
   (ruby-base-mode . subword-mode)
   :init
   (add-to-list 'major-mode-remap-alist '(ruby-mode . ruby-ts-mode))
+  (add-to-list 'auto-mode-alist '("\\`[Rr]akefile\\(?:\\.rb\\)?\\'" . ruby-ts-mode))
   :config
-  ;; (with-eval-after-load 'apheleia
-  ;;   (setf (alist-get 'ruby-mode apheleia-mode-alist)
-  ;;         '(ruby-standard))
-  ;;   (setf (alist-get 'ruby-ts-mode apheleia-mode-alist)
-  ;;         '(ruby-standard)))
-  
+  (with-eval-after-load 'apheleia
+    (setf (alist-get 'ruby-mode apheleia-mode-alist)
+          '(ruby-standard))
+    (setf (alist-get 'ruby-ts-mode apheleia-mode-alist)
+          '(ruby-standard)))
   ;; (with-eval-after-load 'eglot
   ;;   (add-to-list 'eglot-server-programs '((ruby-mode ruby-ts-mode) "ruby-lsp")))
+  (with-eval-after-load 'org
+    (add-to-list 'org-src-lang-modes '("ruby" . ruby-ts)))
   )
 
 (use-package ruby-end
@@ -1026,6 +1311,10 @@ mouse-3: go to end")))
   (ruby-end-insert-newline nil)
   :hook
   (ruby-base-mode . ruby-end-mode))
+
+(use-package elixir-ts-mode
+  :ensure nil
+  :mode "\\.exs\\'")
 
 (use-package rustic
   :after rust-mode
@@ -1037,6 +1326,20 @@ mouse-3: go to end")))
 (use-package odin-mode
   :ensure
   (:host github :repo "mattt-b/odin-mode")
-  :mode "\\.odin\\'")
+  :mode "\\.odin\\'"
+  :hook
+  (odin-mode . eglot-ensure)
+  :config
+  (with-eval-after-load 'apheleia
+    (setf (alist-get 'odinfmt apheleia-formatters)
+          '("odinfmt" "-stdin"))
+    (setf (alist-get 'odin-mode apheleia-mode-alist)
+          'odinfmt))
+  (with-eval-after-load 'eglot
+    (add-to-list 'eglot-server-programs '(odin-mode . ("ols")))))
 
-;;; Test
+(use-package just-ts-mode
+  :mode ("\\(Justfile\\|justfile\\)\\'" . just-ts-mode))
+
+;; Loading machine specific configs if exist
+(minimal-emacs-load-user-init "local.el")
