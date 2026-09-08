@@ -820,7 +820,6 @@ mouse-3: go to end")))
   (eglot-tempel-mode t))
 
 ;;; Navigation & editing: jumping, structured editing, undo, help
-
 (use-package avy
   :commands (avy-goto-char-timer
              avy-goto-word-or-subword-1)
@@ -1153,7 +1152,78 @@ mouse-3: go to end")))
         ("<f12> a" . #'eglot-code-actions)
         ("<f12> o" . #'eglot-code-action-organize-imports)
         ("<f12> q" . #'eglot-code-action-quickfix)
-        ("<f12> =" . #'eglot-format)))
+        ("<f12> =" . #'eglot-format))
+
+  :config
+  ;; LSP servers (rust-analyzer, gopls, ty, ols, ...) put HTML entities
+  ;; like &nbsp; in markdown docs.  Eglot's gfm-view-mode renderer only
+  ;; fontifies them; decode them so eldoc/corfu-popupinfo show real text.
+  (defconst my/eglot-html-entities
+    '(("nbsp" . " ") ("lt" . "<") ("gt" . ">") ("amp" . "&")
+      ("quot" . "\"") ("apos" . "'") ("mdash" . "—") ("ndash" . "–")
+      ("hellip" . "…") ("rarr" . "→") ("larr" . "←") ("times" . "×")
+      ("middot" . "·") ("bull" . "•") ("copy" . "©") ("reg" . "®")
+      ("deg" . "°") ("plusmn" . "±") ("frac12" . "½") ("pi" . "π")
+      ("infin" . "∞") ("sim" . "∼") ("asymp" . "≈") ("ne" . "≠")
+      ("le" . "≤") ("ge" . "≥") ("sum" . "∑") ("int" . "∫"))
+    "Named HTML entities decoded by `my/eglot-decode-html-entities'.")
+
+  (defconst my/eglot-html-entity-regexp
+    (rx "&"
+        (or (group (regexp (regexp-opt (mapcar #'car my/eglot-html-entities))))
+            (seq "#" (group (+ digit)))
+            (seq "#" (any "xX") (group (+ (any xdigit)))))
+        ";")
+    "Regexp matching an HTML entity.")
+
+  (defun my/eglot-decode-html-entities (string)
+    "Decode HTML entities in STRING to fixpoint, preserving properties.
+Return STRING unchanged when it is not a string.  Unknown or invalid
+entities are left as-is."
+    (when (stringp string)
+      (with-temp-buffer
+        (insert string)
+        (let ((case-fold-search t)
+              changed)
+          (while
+              (progn
+                (goto-char (point-min))
+                (setq changed nil)
+                (while (re-search-forward my/eglot-html-entity-regexp nil t)
+                  (let ((replacement
+                         (cond
+                          ((match-string 1)
+                           (cdr (assoc (downcase (match-string 1))
+                                       my/eglot-html-entities)))
+                          ((match-string 2)
+                           (let ((n (string-to-number (match-string 2))))
+                             (if (and (<= 0 n #x10ffff)
+                                      (not (<= #xd800 n #xdfff)))
+                                 (char-to-string n)
+                               (match-string 0))))
+                          ((match-string 3)
+                           (let ((n (string-to-number (match-string 3) 16)))
+                             (if (and (<= 0 n #x10ffff)
+                                      (not (<= #xd800 n #xdfff)))
+                                 (char-to-string n)
+                               (match-string 0)))))))
+                    (unless (equal (match-string 0) replacement)
+                      (setq changed t))
+                    (replace-match replacement t t)))
+                changed))
+          (buffer-string)))))
+
+  (defun my/eglot-format-markup-html-entities (fn markup &optional mode)
+    "Call FN on MARKUP, decoding HTML entities in markdown docs.
+Plaintext and code markup keep literal entities, e.g. \"&lt;\"."
+    (let ((result (funcall fn markup mode)))
+      (if (and (not (stringp markup))
+               (equal (plist-get markup :kind) "markdown"))
+          (my/eglot-decode-html-entities result)
+        result)))
+
+  (advice-add #'eglot--format-markup :around
+              #'my/eglot-format-markup-html-entities))
 
 (use-package consult-eglot
   :after eglot
@@ -1222,14 +1292,17 @@ mouse-3: go to end")))
   ("C-M-<return>" . #'org-insert-subheading)
   (:map org-mode-map
         ("M-g i" . #'consult-org-heading)
-        ("C-'" . #'avy-goto-char-2)
+        ("C-'" . #'avy-goto-word-or-subword-1)
         ("C-," . nil))
   :config
   ;; open links in current window
   (setf (alist-get 'file org-link-frame-setup) 'find-file)
   (setf (alist-get :noweb org-babel-default-header-args) "strip-export")
   (add-to-list 'org-src-lang-modes '("sh" . bash-ts))
-  (add-to-list 'org-src-lang-modes '("bash" . bash-ts)))
+  (add-to-list 'org-src-lang-modes '("bash" . bash-ts))
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((python . t))))
 
 (use-package org-appear
   :hook
