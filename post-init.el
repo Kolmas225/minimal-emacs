@@ -222,6 +222,13 @@ Rerun after editing the fish configuration: \\[my/fish-resync-path]."
   ;; C-x Shift-arrow
   (windmove-delete-default-keybindings))
 
+;; window.el
+(use-package window
+  :ensure nil
+  :custom
+  (scroll-margin 2)
+  (recenter-positions '(middle 2 -3)))
+
 ;; tab-bar
 (use-package tab-bar
   :ensure nil
