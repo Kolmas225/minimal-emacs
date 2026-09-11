@@ -1352,6 +1352,11 @@ Plaintext and code markup keep literal entities, e.g. \"&lt;\"."
   :hook
   (python-base-mode . eglot-ensure)
   :config
+  (with-eval-after-load 'org
+    (setq-default org-babel-default-header-args:python
+                  '((:results . "output")
+                    (:session . "python")
+                    (:async . "yes"))))
   
   (defun my/eglot-dynamic-server (interactive)
     "Pick an LSP server depending on project structure."
