@@ -958,14 +958,14 @@ mouse-3: go to end")))
   (vundo-compact-display t)
   :bind ("C-x u" . #'vundo))
 
-;; Context-aware 'go to definition' functionality for 50+ programming languages
+;; Context-aware 'go to definition' functionality for 60+ programming languages
 (use-package dumb-jump
-  :commands dumb-jump-xref-activate
   :init
   ;; Register `dumb-jump' as an xref backend so it integrates with
-  ;; `xref-find-definitions'. A priority of 90 ensures it is used only when no
+  ;; `xref-find-definitions'. A priority of 80 ensures it is used only when no
   ;; more specific backend is available.
-  (add-hook 'xref-backend-functions #'dumb-jump-xref-activate 90)
+  (with-eval-after-load 'xref
+    (add-hook 'xref-backend-functions #'dumb-jump-xref-activate 80))
 
   (setq dumb-jump-aggressive nil)
   ;; (setq dumb-jump-quiet t)
@@ -980,6 +980,7 @@ mouse-3: go to end")))
   ;; definitions are found.
   (setq dumb-jump-selector 'completing-read)
 
+  :config
   ;; If ripgrep is available, force `dumb-jump' to use it because it is
   ;; significantly faster and more accurate than the default searchers (grep,
   ;; ag, etc.).
@@ -1230,7 +1231,30 @@ Plaintext and code markup keep literal entities, e.g. \"&lt;\"."
         result)))
 
   (advice-add #'eglot--format-markup :around
-              #'my/eglot-format-markup-html-entities))
+              #'my/eglot-format-markup-html-entities)
+
+  ;; eglot + dumb-jump
+  (advice-add 'eglot-xref-backend :override 'xref-eglot+dumb-backend)
+
+  (defun xref-eglot+dumb-backend () 'eglot+dumb)
+
+  (cl-defmethod xref-backend-identifier-at-point ((_backend (eql eglot+dumb)))
+    (cons (xref-backend-identifier-at-point 'eglot)
+          (xref-backend-identifier-at-point 'dumb-jump)))
+
+  (cl-defmethod xref-backend-identifier-completion-table ((_backend (eql eglot+dumb)))
+    (xref-backend-identifier-completion-table 'eglot))
+
+  (cl-defmethod xref-backend-definitions ((_backend (eql eglot+dumb)) identifier)
+    (or (xref-backend-definitions 'eglot (car identifier))
+        (xref-backend-definitions 'dumb-jump (cdr identifier))))
+
+  (cl-defmethod xref-backend-references ((_backend (eql eglot+dumb)) identifier)
+    (or (xref-backend-references 'eglot (car identifier))
+        (xref-backend-references 'dumb-jump (cdr identifier))))
+
+  (cl-defmethod xref-backend-apropos ((_backend (eql eglot+dumb)) pattern)
+    (xref-backend-apropos 'eglot pattern)))
 
 (use-package consult-eglot
   :after eglot
