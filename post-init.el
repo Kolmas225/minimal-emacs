@@ -357,19 +357,23 @@ mouse-3: go to end")))
 (defun my/open-line-and-indent (n)
   "Like `newline-and-indent' for the `open-line' command."
   (interactive "*p")
-  (let ((inhibit-message t)
-        (eol (copy-marker (line-end-position))))
-    (open-line n)
-    (indent-region (point) eol)
-    (set-marker eol nil)))
+  (open-line n)
+  (save-excursion
+    (unless (and (bolp) (eolp))
+      (forward-line 1))
+    (indent-according-to-mode)))
 
-;; taken from doom
 (defun my/empty-newline-above ()
-  "Insert an indented new line before the current one."
+  "Insert a new line above, keeping the current line's indentation."
   (interactive)
-  (beginning-of-line)
-  (save-excursion (newline))
-  (indent-according-to-mode))
+  (let ((indent (save-excursion
+                  (beginning-of-line)
+                  (buffer-substring-no-properties
+                   (point)
+                   (progn (skip-chars-forward " \t") (point))))))
+    (beginning-of-line)
+    (save-excursion (newline))
+    (insert indent)))
 
 (defun my/empty-newline-below ()
   "Insert an indented new line after the current one."
