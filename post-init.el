@@ -1150,7 +1150,8 @@ mouse-3: go to end")))
   (eglot-managed-mode . (lambda ()
                           ;; NOTE: ignore case for easier completion
                           (setq-local orderless-smart-case nil
-                                      completion-ignore-case t)))
+                                      completion-ignore-case t)
+                          (eglot-inlay-hints-mode -1)))
   :bind
   (:map eglot-mode-map
         ("<f12> d" . #'eglot-find-declaration)
@@ -1160,9 +1161,12 @@ mouse-3: go to end")))
         ("<f12> a" . #'eglot-code-actions)
         ("<f12> o" . #'eglot-code-action-organize-imports)
         ("<f12> q" . #'eglot-code-action-quickfix)
-        ("<f12> =" . #'eglot-format))
+        ("<f12> =" . #'eglot-format)
+        ("C-~" . #'eglot-momentary-inlay-hints))
 
   :config
+  ;; Disable signature hints
+  (setq-default eglot-inlay-hints-mode nil)
   ;; LSP servers (rust-analyzer, gopls, ty, ols, ...) put HTML entities
   ;; like &nbsp; in markdown docs.  Eglot's gfm-view-mode renderer only
   ;; fontifies them; decode them so eldoc/corfu-popupinfo show real text.
