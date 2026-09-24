@@ -42,7 +42,7 @@ Rerun after editing the fish configuration: \\[my/fish-resync-path]."
   :config
   ;; Set `compile-angel-verbose' to nil to disable compile-angel messages.
   ;; (When set to nil, compile-angel won't show which file is being compiled.)
-  (setq compile-angel-verbose t)
+  (setq compile-angel-verbose nil)
 
   ;; Uncomment the line below to compile automatically when an Elisp file is saved
   ;; (add-hook 'emacs-lisp-mode-hook #'compile-angel-on-save-local-mode)
@@ -413,6 +413,14 @@ mouse-3: go to end")))
       (call-interactively #'my/rename-current-buffer-file)
     (call-interactively #'write-file)))
 
+(defun my/clear-all-registers ()
+  "Clear all Emacs registers."
+  (interactive)
+  (when (or (null register-alist)
+            (yes-or-no-p "Clear ALL registers? "))
+    (setq register-alist nil)
+    (message "All registers cleared.")))
+
 (keymap-global-unset "<f2>")            ; 2C-mode
 (keymap-global-unset "<f10>")           ; Context menu
 
@@ -421,6 +429,7 @@ mouse-3: go to end")))
 (keymap-global-set "C-S-<return>" #'my/empty-newline-above)
 (keymap-global-set "C-<return>" #'my/empty-newline-below)
 (keymap-global-set "C-S-k" #'my/backward-kill-line)
+(keymap-set ctl-x-r-map "M-d" #'my/clear-all-registers)
 
 ;; Better ergo imo
 (keymap-global-set "C-<prior>" #'scroll-left)
@@ -703,6 +712,13 @@ mouse-3: go to end")))
                  (window-parameters (mode-line-format . none)))))
 
 (use-package embark-consult)
+
+(use-package consult-dir
+  :bind
+  (("C-x C-d" . consult-dir)
+   :map vertico-map
+   ("C-x C-d" . consult-dir)
+   ("C-x C-j" . consult-dir-jump-file)))
 
 (use-package consult-todo
   :bind
@@ -1169,6 +1185,7 @@ mouse-3: go to end")))
         ("C-~" . #'eglot-momentary-inlay-hints))
 
   :config
+  (setq eglot-max-file-watches 1600)
   ;; Disable signature hints
   (setq-default eglot-inlay-hints-mode nil)
   ;; LSP servers (rust-analyzer, gopls, ty, ols, ...) put HTML entities
